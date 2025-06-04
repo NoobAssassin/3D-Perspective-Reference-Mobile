@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drawabox Cube Practice Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5.5.2/dist/iro.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@jaames/iro@5.5.2/dist/iro.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Universal box-sizing and font */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: #121212;
+            color: #fff;
+            min-height: 100vh;
+            overflow: hidden; /* Prevent scrollbars from body if panel/window overflows slightly */
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+            transition: background-color 0.5s ease;
+            z-index: 1;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 320px;
+            max-height: calc(100vh - 40px);
+            background: rgba(30, 30, 40, 0.9);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            overflow-y: auto;
+            transition: transform 0.4s ease;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel-collapsed { transform: translateX(-340px); }
+        .panel-header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: sticky; top: 0; background: rgba(30, 30, 40, 0.95); z-index: 2; }
+        .panel-title { font-size: 1.4rem; font-weight: 600; color: #4CAF50; }
+        .toggle-btn, .open-panel-btn { width: 36px; height: 36px; background: #4CAF50; border: none; border-radius: 50%; color: white; font-size: 1.2rem; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: all 0.3s ease; z-index: 10; }
+        .toggle-btn:hover, .open-panel-btn:hover { background: #66BB6A; transform: rotate(90deg); }
+        .open-panel-btn { position: absolute; top: 20px; left: 20px; display: none; z-index: 1001; }
+
+        .panel-content { padding: 20px; }
+        .control-group { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .control-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .group-title { font-size: 1.1rem; margin-bottom: 15px; color: #4CAF50; display: flex; align-items: center; }
+        .group-title i { margin-right: 8px; }
+
+        .input-row { display: flex; margin-bottom: 12px; align-items: center; }
+        .input-row label { width: 130px; font-size: 0.9rem; color: #ccc; flex-shrink: 0; }
+        .input-row input, .input-row select, .input-row .value-display-container { flex: 1; padding: 8px 12px; border: 1px solid #444; border-radius: 6px; font-size: 0.9rem; background: rgba(20, 20, 30, 0.7); color: white; min-width: 50px; }
+        .input-row .value-display-container { display: flex; align-items: center; padding: 0; }
+        .input-row .value-display-container input[type="range"] { flex-grow: 1; margin-right: 8px; }
+        .input-row .value-display { font-size: 0.85rem; color: #aaa; min-width: 35px; text-align: right; padding-right: 5px; }
+        .input-row input:focus, .input-row select:focus { outline: none; border-color: #4CAF50; }
+        .input-row input[type="range"] { padding: 0; height: 20px; -webkit-appearance: none; background: transparent; }
+        .input-row input[type="range"]::-webkit-slider-runnable-track { background: #444; border-radius: 3px; height: 6px; }
+        .input-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #4CAF50; cursor: grab; margin-top: -6px; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+
+        .checkbox-row { display: flex; align-items: center; margin-bottom: 12px; }
+        .checkbox-row input[type="checkbox"], .checkbox-row input[type="radio"] { margin-right: 10px; width: 18px; height: 18px; cursor: pointer; accent-color: #4CAF50; }
+        .checkbox-row label { font-size: 0.95rem; color: #ccc; cursor: pointer; }
+
+        .dimension-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 5px; }
+        .dimension-inputs input { width: 100%; padding: 8px; border: 1px solid #444; border-radius: 6px; font-size: 0.95rem; background: rgba(20, 20, 30, 0.7); color: white; }
+
+        .color-picker-container { margin: 15px 0; padding: 10px; background: rgba(20, 20, 30, 0.7); border-radius: 8px; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+        .color-picker-label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: #ccc; }
+        .iro__wheel, .iro__slider { background-color: transparent !important; border: none !important; }
+        .iro__border { border: 1px solid rgba(255, 255, 255, 0.1) !important; }
+
+        .light-control-wheel { position: relative; width: 180px; height: 180px; margin: 15px auto; border-radius: 50%; background: radial-gradient(circle, #333 0%, #111 100%); box-shadow: 0 0 15px rgba(0, 0, 0, 0.4); cursor: pointer; overflow: hidden; }
+        .light-indicator { position: absolute; width: 18px; height: 18px; background: #FFD700; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 8px #FFD700, 0 0 15px rgba(255, 215, 0, 0.6); z-index: 2; pointer-events: none; }
+        .light-axis { position: absolute; top: 50%; left: 50%; width: 1px; height: 100%; background: rgba(255, 255, 255, 0.15); transform: translateX(-50%) rotate(var(--angle)); transform-origin: top center; }
+        .light-axis:nth-child(1) { --angle: 0deg; } .light-axis:nth-child(2) { --angle: 90deg; } .light-axis:nth-child(3) { --angle: 180deg; } .light-axis:nth-child(4) { --angle: 270deg; }
+        .light-center { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: #fff; border-radius: 50%; transform: translate(-50%, -50%); z-index: 1; }
+
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }
+        .btn-group-single { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
+        .btn { padding: 10px 15px; border: none; border-radius: 6px; background: #4CAF50; color: white; font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: all 0.3s ease; text-align: center; }
+        .btn:hover { background: #66BB6A; transform: translateY(-2px); } .btn-reset { background: #607D8B; }
+
+        footer { position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center; color: rgba(255, 255, 255, 0.6); font-size: 0.85rem; padding: 8px; z-index: 5; }
+        .instructions { background: rgba(40, 40, 50, 0.7); border-radius: 8px; padding: 15px; margin-top: 15px; font-size: 0.9rem; }
+        .instructions h3 { color: #4CAF50; margin-bottom: 10px; font-size: 1rem; } .instructions ul { padding-left: 20px; } .instructions li { margin-bottom: 8px; color: #ccc; line-height: 1.4; }
+
+        .preset-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+        .preset-btn { padding: 8px; border: none; border-radius: 4px; background: rgba(20, 20, 30, 0.7); color: white; font-size: 0.8rem; cursor: pointer; transition: all 0.2s ease; }
+        .preset-btn:hover { background: rgba(40, 40, 50, 0.7); }
+
+        .grid-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.2; background-image: linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px); background-size: 20px 20px; z-index: 2; }
+        .perspective-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+        /* The .perspective-line CSS is no longer needed as lines are drawn on canvas */
+
+        .progress-bar { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); width: 300px; height: 10px; background: rgba(255, 255, 255, 0.2); border-radius: 5px; z-index: 10; }
+        .progress-fill { height: 100%; width: 0%; background: #4CAF50; border-radius: 5px; transition: width 0.5s ease; }
+        .progress-text { position: absolute; top: 85px; left: 50%; transform: translateX(-50%); color: white; font-size: 0.9rem; text-align: center; z-index: 10; }
+
+        .exercise-complete { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(30, 30, 40, 0.95); padding: 30px; border-radius: 15px; text-align: center; z-index: 20; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); display: none; }
+        .exercise-complete h2 { color: #4CAF50; margin-bottom: 20px; font-size: 2rem; } .exercise-complete p { margin-bottom: 20px; font-size: 1.1rem; color: #ccc; }
+        .exercise-complete button { padding: 12px 25px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; }
+        .exercise-complete button:hover { background: #66BB6A; transform: translateY(-3px); }
+
+        .practice-timer, .practice-counter { position: absolute; left: 50%; transform: translateX(-50%); background: rgba(30, 30, 40, 0.9); padding: 10px 20px; border-radius: 30px; font-size: 1rem; color: white; z-index: 10; display: flex; align-items: center; gap: 8px; }
+        .practice-timer { top: 20px; } .practice-counter { top: 60px; }
+
+        .drawing-tools { position: absolute; bottom: 20px; right: 20px; display: flex; gap: 10px; z-index: 10; }
+        .drawing-tools button { width: 50px; height: 50px; border-radius: 50%; background: rgba(30, 30, 40, 0.9); color: white; border: none; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; cursor: pointer; transition: all 0.3s ease; }
+        .drawing-tools button:hover { background: #4CAF50; transform: translateY(-5px); }
+
+        .vanishing-point {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: rgba(0, 255, 255, 0.7); /* Default Cyan */
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            transform: translate(-50%, -50%); /* Center the div on the coordinate */
+            cursor: grab;
+            z-index: 100;
+            display: none; /* Hidden by default */
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+            pointer-events: auto; /* Enable dragging */
+        }
+        .vanishing-point:active {
+            cursor: grabbing;
+        }
+        /* Specific colors for clarity */
+        #vp1 { background-color: rgba(255, 0, 0, 0.7); /* Red for X-axis related VP */ }
+        #vp2 { background-color: rgba(0, 255, 0, 0.7); /* Green for Y-axis related VP */ }
+        #vp3 { background-color: rgba(0, 0, 255, 0.7); /* Blue for Z-axis related VP */ }
+
+
+        @media (max-width: 500px) {
+            .control-panel { width: calc(100% - 20px); left: 10px; top: 10px; max-height: 70vh; }
+            .dimension-inputs { grid-template-columns: 1fr 1fr; }
+            .open-panel-btn { left: 10px; top: 10px; }
+            .light-control-wheel { width: 150px; height: 150px; }
+            .progress-bar, .progress-text { width: 200px; }
+            .practice-timer, .practice-counter { font-size: 0.85rem; padding: 8px 15px; }
+            .drawing-tools button { width: 40px; height: 40px; font-size: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <div class="grid-overlay" id="grid-overlay" style="display: none;"></div>
+        <div class="perspective-lines" id="perspective-lines">
+            <canvas id="perspective-canvas"></canvas> <!-- 2D Canvas for drawing perspective lines -->
+        </div>
+        <div id="vp-container">
+            <div class="vanishing-point" id="vp1" data-axis="x"></div>
+            <div class="vanishing-point" id="vp2" data-axis="y"></div>
+            <div class="vanishing-point" id="vp3" data-axis="z"></div>
+        </div>
+
+        <div class="practice-timer" style="display: flex;"> <i class="fas fa-clock"></i> <span id="timer">00:00</span> </div>
+        <div class="practice-counter" style="display: flex;"> <i class="fas fa-cube"></i> <span id="counter">0</span> cubes drawn </div>
+
+        <div class="progress-bar"> <div class="progress-fill" id="progress-fill"></div> </div>
+        <div class="progress-text" id="progress-text">Daily Goal: 0/10 cubes</div>
+
+        <div class="exercise-complete" id="exercise-complete">
+            <h2>Exercise Complete!</h2>
+            <p>You've drawn <span id="complete-count">10</span> cubes today. Great job!</p>
+            <button id="close-complete">Continue Practicing</button>
+        </div>
+
+        <div class="drawing-tools">
+            <button id="new-cube"><i class="fas fa-plus"></i></button>
+            <button id="random-view"><i class="fas fa-random"></i></button>
+            <button id="save-view"><i class="fas fa-camera"></i></button>
+            <button id="reset-all"><i class="fas fa-redo"></i></button>
+        </div>
+    </div>
+
+    <button class="open-panel-btn" id="open-panel">☰</button>
+
+    <div class="control-panel" id="control-panel">
+        <div class="panel-header">
+            <div class="panel-title">Drawabox Cube Practice</div>
+            <button class="toggle-btn" id="toggle-panel">✕</button>
+        </div>
+
+        <div class="panel-content">
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-cog"></i> Practice Settings</div>
+                <div class="input-row"> <label for="goal">Daily Goal:</label> <select id="goal"> <option value="5">5 Cubes</option> <option value="10" selected>10 Cubes</option> <option value="20">20 Cubes</option> <option value="30">30 Cubes</option> </select> </div>
+                <div class="checkbox-row"> <input type="checkbox" id="auto-rotate"> <label for="auto-rotate">Auto Rotate Cube</label> </div>
+                <div class="checkbox-row"> <input type="checkbox" id="show-timer" checked> <label for="show-timer">Show Timer</label> </div>
+                <div class="checkbox-row"> <input type="checkbox" id="show-counter" checked> <label for="show-counter">Show Counter</label> </div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-ruler"></i> 3D Cube Dimensions</div>
+                <div class="dimension-inputs">
+                    <div><label>Width:</label><input type="number" id="width" step="0.1" value="2"></div>
+                    <div><label>Height:</label><input type="number" id="height" step="0.1" value="2"></div>
+                    <div><label>Depth:</label><input type="number" id="depth" step="0.1" value="2"></div>
+                </div>
+                <div class="preset-buttons"> <button class="preset-btn" data-width="2" data-height="2" data-depth="2">Std Cube</button> <button class="preset-btn" data-width="3" data-height="1.5" data-depth="2">Long</button> <button class="preset-btn" data-width="1" data-height="4" data-depth="1">Tall</button> </div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-paint-brush"></i> 3D Display Mode</div>
+                <div class="checkbox-row"><input type="radio" id="solid" name="mode" checked><label for="solid">Solid</label></div>
+                <div class="checkbox-row"><input type="radio" id="wireframe" name="mode"><label for="wireframe">Wireframe</label></div>
+                <div class="checkbox-row"><input type="radio" id="translucent" name="mode"><label for="translucent">Translucent</label></div>
+                <div class="checkbox-row"><input type="checkbox" id="show-grid"><label for="show-grid">Show 3D Grid</label></div>
+                <div class="checkbox-row"><input type="checkbox" id="show-vanishing"><label for="show-vanishing">Show 3D V.Lines</label></div>
+                <div class="input-row"><label for="edge-color">3D Edge Color:</label><select id="edge-color"><option value="black">Black</option><option value="white">White</option><option value="red">Red</option><option value="blue">Blue</option></select></div>
+                <div class="input-row"><label for="edge-thickness">3D Edge Thick:</label><div class="value-display-container"><input type="range" id="edge-thickness" min="0.5" max="5" step="0.1" value="1.5"></div></div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-gem"></i> 3D Material & Color</div>
+                <div class="input-row"><label for="texture">3D Material:</label><select id="texture"><option value="standard">Matte</option><option value="metal">Metal</option><option value="wood">Wood</option><option value="concrete">Concrete</option></select></div>
+                <div class="color-wheel-container"><div class="color-picker-container"><div class="color-picker-label">3D Cube Color:</div><div id="cube-color-picker"></div></div></div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-image"></i> 3D Environment</div>
+                <div class="input-row"><label for="background-type">3D Background:</label><select id="background-type"><option value="color">Solid Color</option><option value="room">Room Env</option><option value="outdoor">Outdoor Env</option><option value="abstract">Abstract Env</option><option value="custom-image">Custom Image</option></select></div>
+                <div class="color-picker-container" id="bg-color-picker-container"><div class="color-picker-label">3D BG Color:</div><div id="bg-color-picker"></div></div>
+                <div class="input-row" id="bg-upload-row" style="display: none;"><label for="bg-upload">Upload 3D BG:</label><input type="file" id="bg-upload" accept="image/*"></div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-lightbulb"></i> 3D Lighting</div>
+                <div class="input-row"><label for="light-type">Light Source:</label><select id="light-type"><option value="directional">Directional</option><option value="point">Point</option><option value="spot">Spot</option></select></div>
+                <div class="input-row"><label for="light-intensity">Intensity:</label><div class="value-display-container"><input type="range" id="light-intensity" min="0.1" max="3" step="0.05" value="1.2"></div></div>
+                <div class="input-row"><label for="light-y-position">Height (Y):</label><div class="value-display-container"><input type="range" id="light-y-position" min="-10" max="10" step="0.1" value="5"></div></div>
+                <div class="color-picker-container"><div class="color-picker-label">3D Light Color:</div><div id="light-color-picker"></div></div>
+                <div class="group-title" style="margin-top: 20px; margin-bottom: 10px;"><i class="fas fa-sync-alt"></i> Light XZ Position</div>
+                <div class="light-control-wheel" id="light-wheel"><div class="light-center"></div><div class="light-axis"></div><div class="light-axis"></div><div class="light-axis"></div><div class="light-axis"></div><div class="light-indicator" id="light-indicator"></div></div>
+                <div class="btn-group"><button class="btn" id="reset-lights">Reset Lights</button><button class="btn btn-reset" id="reset-view">Reset View</button></div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-lock"></i> 3D Rotation Lock</div>
+                <div class="checkbox-row"><input type="checkbox" id="lock-x"><label for="lock-x">Lock X Axis</label></div>
+                <div class="checkbox-row"><input type="checkbox" id="lock-y"><label for="lock-y">Lock Y Axis</label></div>
+                <div class="checkbox-row"><input type="checkbox" id="lock-z"><label for="lock-z">Lock Z Axis (Orbit)</label></div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-camera"></i> Camera POV</div>
+                <div class="dimension-inputs">
+                    <div><label>Cam X:</label><input type="number" id="cam-pos-x" step="0.1" value="0"></div>
+                    <div><label>Cam Y:</label><input type="number" id="cam-pos-y" step="0.1" value="1.5"></div>
+                    <div><label>Cam Z:</label><input type="number" id="cam-pos-z" step="0.1" value="6"></div>
+                </div>
+                <div class="dimension-inputs" style="margin-top: 10px;">
+                    <div><label>Target X:</label><input type="number" id="cam-target-x" step="0.1" value="0"></div>
+                    <div><label>Target Y:</label><input type="number" id="cam-target-y" step="0.1" value="0"></div>
+                    <div><label>Target Z:</label><input type="number" id="cam-target-z" step="0.1" value="0"></div>
+                </div>
+                <button class="btn btn-group-single" id="reset-camera-pov" style="margin-top: 15px;">Reset Camera POV</button>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-ruler-combined"></i> Perspective Tool</div>
+                <div class="input-row">
+                    <label>Perspective Type:</label>
+                    <select id="perspective-type-select">
+                        <option value="3-point" selected>3-Point (Default)</option>
+                        <option value="2-point">2-Point</option>
+                        <option value="1-point">1-Point</option>
+                    </select>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="enable-vp-drag">
+                    <label for="enable-vp-drag">Enable Draggable Vanishing Points</label>
+                </div>
+                <div class="input-row">
+                    <label for="orthogonal-color">Line Color:</label>
+                    <div class="color-picker-container" style="margin: 0; padding: 0;">
+                        <div id="orthogonal-color-picker"></div>
+                    </div>
+                </div>
+                <div class="input-row">
+                    <label for="orthogonal-opacity">Line Opacity:</label>
+                    <div class="value-display-container">
+                        <input type="range" id="orthogonal-opacity" min="0.1" max="1" step="0.05" value="0.3">
+                        <span class="value-display" id="orthogonal-opacity-display">0.3</span>
+                    </div>
+                </div>
+                <button class="btn btn-group-single" id="reset-perspective-view" style="margin-top: 15px;">Reset Perspective View</button>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-vector-square"></i> Geometric Distortion</div>
+                <div class="input-row">
+                    <label for="skew-x">Skew X:</label>
+                    <div class="value-display-container">
+                        <input type="range" id="skew-x" min="-0.5" max="0.5" step="0.01" value="0">
+                        <span class="value-display" id="skew-x-display">0.00</span>
+                    </div>
+                </div>
+                <div class="input-row">
+                    <label for="skew-y">Skew Y:</label>
+                    <div class="value-display-container">
+                        <input type="range" id="skew-y" min="-0.5" max="0.5" step="0.01" value="0">
+                        <span class="value-display" id="skew-y-display">0.00</span>
+                    </div>
+                </div>
+                <div class="input-row">
+                    <label for="skew-z">Skew Z:</label>
+                    <div class="value-display-container">
+                        <input type="range" id="skew-z" min="-0.5" max="0.5" step="0.01" value="0">
+                        <span class="value-display" id="skew-z-display">0.00</span>
+                    </div>
+                </div>
+                <button class="btn btn-group-single" id="reset-distortion" style="margin-top: 15px;">Reset Distortion</button>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-history"></i> History & Views</div>
+                <div class="btn-group"><button class="btn" id="undo-btn" disabled><i class="fas fa-undo"></i> Undo</button><button class="btn" id="redo-btn" disabled><i class="fas fa-redo"></i> Redo</button></div>
+                <div class="btn-group" style="grid-template-columns: repeat(2, 1fr);"><button class="btn" id="view-front">Front</button><button class="btn" id="view-top">Top</button><button class="btn" id="view-side">Side</button><button class="btn" id="view-iso">Isometric</button></div>
+                <button class="btn" id="screenshot" style="margin-top: 15px; grid-column: span 2;">Capture Screenshot</button>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title"><i class="fas fa-save"></i> Custom Presets</div>
+                <div class="input-row"><label for="preset-select">Load Preset:</label><select id="preset-select"><option value="">-- Select --</option></select></div>
+                <div class="btn-group"><button class="btn" id="save-preset-btn">Save Current</button><button class="btn btn-reset" id="delete-preset-btn">Delete Selected</button></div>
+            </div>
+
+            <div class="instructions">
+                <h3>Drawabox Practice Tips:</h3>
+                <ul><li>Ghosting, Perspective, Rotation, Shading, Reference, Practice</li></ul>
+            </div>
+        </div>
+    </div>
+
+    <footer><p>Drawabox Cube Practice Tool | Drag to rotate | Scroll to zoom</p></footer>
+
+    <script>
+        // Three.js components
+        let scene, camera, renderer, controls;
+        let cube, cubeMaterial, cubeEdges, primaryLight;
+        let perspectiveCanvas, perspectiveCtx; // New: 2D Canvas and its context
+
+        // 3D State variables
+        let width = 2, height = 2, depth = 2; // Default 3D cube dimensions
+        let displayMode = 'solid';
+        let edgeColor = 0x000000;
+        let cubeColor = new THREE.Color(0xD3D3D3);
+        let currentTexture = 'standard';
+        let lightType = 'directional';
+        let lightPosition = {x: 5, y: 5, z: 5};
+        let lightIntensity = 0.8; // Adjusted for less brightness
+        let lightColor = new THREE.Color(0xffffff);
+        let autoRotate = false;
+
+        let cubeColorPicker, bgColorPicker, lightColorPicker, orthogonalColorPicker;
+        let cubeCount = 0, dailyGoal = 10, startTime, timerInterval;
+        let history = [], historyIndex = -1; const MAX_HISTORY = 50;
+        const colorMap = { 'black': 0x000000, 'white': 0xffffff, 'red': 0xff0000, 'blue': 0x0000ff };
+
+        // Perspective Tool variables
+        let perspectiveType = '3-point'; // Default perspective type
+        let enableVPDraw = false;
+        let isDraggingVP = false;
+        let activeVP = null;
+        let vpElements = {}; // Store references to VP divs
+        let orthogonalColor = new THREE.Color(0xFF0000); // Initial red
+        let orthogonalOpacity = 0.3; // Initial opacity
+
+        // Geometric Distortion variables
+        let skewX = 0; // Skew along X-axis
+        let skewY = 0; // Skew along Y-axis
+        let skewZ = 0; // Skew along Z-axis
+
+        // Helper function to get an rgba string from a THREE.Color object
+        function getRgbaStringFromThreeColor(threeColor, opacity) {
+            const r = Math.round(threeColor.r * 255);
+            const g = Math.round(threeColor.g * 255);
+            const b = Math.round(threeColor.b * 255);
+            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        }
+
+        // Helper function to find intersection of two 2D lines (not segments)
+        function getLineIntersection(p1, p2, p3, p4) {
+            const x1 = p1.x, y1 = p1.y;
+            const x2 = p2.x, y2 = p2.y;
+            const x3 = p3.x, y3 = p3.y;
+            const x4 = p4.x, y4 = p4.y;
+
+            const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+            if (Math.abs(den) < 1e-6) { // Lines are parallel or coincident (using a small epsilon for float comparison)
+                return null;
+            }
+
+            const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+            return {
+                x: x1 + t * (x2 - x1),
+                y: y1 + t * (y2 - y1)
+            };
+        }
+
+        function init() {
+            console.log("Main init() called.");
+            try {
+                scene = new THREE.Scene(); scene.background = new THREE.Color(0xffffff);
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 1.5, 6); // Initial camera position
+                camera.lookAt(0,0,0); // Initial camera target
+
+                // Initialize WebGLRenderer with powerPreference for mobile optimization
+                renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                // Cap pixel ratio to 2 for better mobile performance on high-DPI screens
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+                // Initialize 2D Canvas for perspective lines
+                perspectiveCanvas = document.getElementById('perspective-canvas');
+                perspectiveCtx = perspectiveCanvas.getContext('2d');
+                // Set initial size of 2D canvas
+                perspectiveCanvas.width = window.innerWidth;
+                perspectiveCanvas.height = window.innerHeight;
+
+                createCube(); createLights();
+                controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true; controls.dampingFactor = 0.05; controls.rotateSpeed = 0.7;
+                controls.screenSpacePanning = false; controls.minDistance = 1; controls.maxDistance = 20;
+                controls.enablePan = false; controls.target.set(0, 0, 0); // Initial controls target
+
+                // Get references to VP divs BEFORE calling initPerspectiveGuides
+                vpElements.x = document.getElementById('vp1');
+                vpElements.y = document.getElementById('vp2');
+                vpElements.z = document.getElementById('vp3');
+
+                initColorPickers(); initLightWheel(); initPracticeTracking();
+                loadPresets(); setupEventListeners();
+
+
+                // Attach VP drag listeners
+                for (const axis in vpElements) {
+                    vpElements[axis].addEventListener('mousedown', startDragVP);
+                    vpElements[axis].addEventListener('touchstart', startDragVP, { passive: false });
+                }
+
+                saveState();
+                window.addEventListener('resize', onWindowResize, false);
+                animate();
+                console.log("Main init() completed successfully.");
+            } catch (e) {
+                console.error("Error in main init():", e);
+                const errorDiv = document.createElement('div'); errorDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;padding:20px;background-color:red;color:white;z-index:10000;';
+                errorDiv.textContent = 'Initialization Error. Check console (F12). Error: ' + e.message; document.body.appendChild(errorDiv);
+            }
+        }
+
+        function createCube() {
+            if (cube) { scene.remove(cube); if (cubeEdges) scene.remove(cubeEdges); }
+            width = parseFloat(document.getElementById('width').value) || 2;
+            height = parseFloat(document.getElementById('height').value) || 2;
+            depth = parseFloat(document.getElementById('depth').value) || 2;
+
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+
+            // Apply geometric distortion to the vertices of the BoxGeometry
+            const positionAttribute = geometry.getAttribute('position');
+            const originalPositions = positionAttribute.array;
+            const newPositions = new Float32Array(originalPositions.length);
+
+            for (let i = 0; i < originalPositions.length; i += 3) {
+                let x = originalPositions[i];
+                let y = originalPositions[i + 1];
+                let z = originalPositions[i + 2];
+
+                // Apply skew transformations
+                // Shift X based on Y (skewY) and Z (skewZ)
+                newPositions[i]     = x + skewX * y + skewX * z;
+                // Shift Y based on X (skewX) and Z (skewZ)
+                newPositions[i + 1] = y + skewY * x + skewY * z;
+                // Shift Z based on X (skewX) and Y (skewY)
+                newPositions[i + 2] = z + skewZ * x + skewZ * y;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(newPositions, 3));
+            geometry.computeVertexNormals(); // Recalculate normals for correct lighting after distortion
+
+            cubeMaterial = new THREE.MeshStandardMaterial({ color: cubeColor, side: THREE.DoubleSide, metalness: 0.2, roughness: 0.7 });
+            updateMaterial();
+            cube = new THREE.Mesh(geometry, cubeMaterial);
+            scene.add(cube);
+
+            // Recreate edges geometry based on the distorted cube geometry
+            const edgesGeom = new THREE.EdgesGeometry(geometry);
+            cubeEdges = new THREE.LineSegments( edgesGeom, new THREE.LineBasicMaterial({  color: edgeColor, linewidth: parseFloat(document.getElementById('edge-thickness').value)  }) );
+            scene.add(cubeEdges);
+            updateVisualMode();
+        }
+
+        function updateMaterial() {
+             if (!cubeMaterial) return;
+            cubeMaterial.wireframe = displayMode === 'wireframe';
+            cubeMaterial.transparent = displayMode === 'translucent';
+            cubeMaterial.opacity = displayMode === 'translucent' ? 0.6 : 1.0;
+            cubeMaterial.color.set(cubeColor);
+            switch(currentTexture) {
+                case 'metal': cubeMaterial.metalness = 0.9; cubeMaterial.roughness = 0.1; break;
+                case 'wood': cubeMaterial.metalness = 0.2; cubeMaterial.roughness = 0.8; break;
+                case 'concrete': cubeMaterial.metalness = 0.1; cubeMaterial.roughness = 0.9; break;
+                default: cubeMaterial.metalness = 0.2; cubeMaterial.roughness = 0.7;
+            }
+            cubeMaterial.needsUpdate = true;
+        }
+        function updateVisualMode() {
+            if (cubeEdges) { cubeEdges.visible = displayMode !== 'wireframe'; if(cubeEdges.material) cubeEdges.material.color.set(edgeColor); }
+            updateMaterial();
+        }
+        function createLights() {
+            const lightsToRemove = []; scene.traverse(child => { if (child.isLight) lightsToRemove.push(child); });
+            lightsToRemove.forEach(l => scene.remove(l)); primaryLight = null;
+            // Adjusted ambient light intensity for less brightness
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Increased ambient light for better overall illumination
+            scene.add(ambientLight);
+
+            switch(lightType) {
+                case 'point': primaryLight = new THREE.PointLight(lightColor, lightIntensity, 50, 1.5); break;
+                case 'spot': primaryLight = new THREE.SpotLight(lightColor, lightIntensity, 30, Math.PI / 4, 0.3, 1.5); break;
+                default: primaryLight = new THREE.DirectionalLight(lightColor, lightIntensity);
+            }
+            primaryLight.position.set(lightPosition.x, lightPosition.y, lightPosition.z);
+            if (lightType === 'spot' && cube) primaryLight.target = cube;
+            scene.add(primaryLight);
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.3); // Reduced fill light intensity
+            fillLight.position.set(-5, 3, -5); scene.add(fillLight);
+        }
+        function resetLighting() {
+            lightPosition = {x: 5, y: 5, z: 5}; lightIntensity = 0.8; lightColor.set(0xffffff); lightType = 'directional';
+            document.getElementById('light-y-position').value = lightPosition.y;
+            document.getElementById('light-intensity').value = lightIntensity;
+            document.getElementById('light-type').value = lightType;
+            if (lightColorPicker) lightColorPicker.setColor(lightColor.getHexString());
+            if (typeof window.updateLightIndicator === 'function') window.updateLightIndicator();
+            createLights(); saveState();
+        }
+        function resetView() {
+            camera.position.set(0, 1.5, 6); controls.target.set(0,0,0); controls.reset(); controls.update(); saveState();
+        }
+
+        function resetCameraPOV() {
+            camera.position.set(0, 1.5, 6);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            document.getElementById('cam-pos-x').value = camera.position.x;
+            document.getElementById('cam-pos-y').value = camera.position.y;
+            document.getElementById('cam-pos-z').value = camera.position.z;
+            document.getElementById('cam-target-x').value = controls.target.x;
+            document.getElementById('cam-target-y').value = controls.target.y;
+            document.getElementById('cam-target-z').value = controls.target.z;
+            saveState();
+        }
+
+        function initColorPickers() {
+            const pickerOpts = { width: 130, borderWidth: 1, borderColor: "#444", layout: [{ component: iro.ui.Wheel, options:{wheelLightness:false}}, {component: iro.ui.Slider, options:{sliderType:'value'}}] };
+            cubeColorPicker = new iro.ColorPicker("#cube-color-picker", {...pickerOpts, color: cubeColor.getHexString() });
+            cubeColorPicker.on("color:change", (c) => { cubeColor.set(c.hexString); updateMaterial(); saveState(); });
+            if(scene.background instanceof THREE.Color){
+                 bgColorPicker = new iro.ColorPicker("#bg-color-picker", {...pickerOpts, color: scene.background.getHexString() });
+                 bgColorPicker.on("color:change", (c) => { if (document.getElementById('background-type').value === 'color') { scene.background.set(c.hexString); saveState(); } });
+            } else {
+                 bgColorPicker = new iro.ColorPicker("#bg-color-picker", {...pickerOpts, color: "#ffffff" });
+                 bgColorPicker.on("color:change", (c) => { if (document.getElementById('background-type').value === 'color') { scene.background = new THREE.Color(c.hexString); saveState(); } });
+            }
+            lightColorPicker = new iro.ColorPicker("#light-color-picker", {...pickerOpts, color: lightColor.getHexString() });
+            lightColorPicker.on("color:change", (c) => { lightColor.set(c.hexString); if (primaryLight) primaryLight.color.set(lightColor); saveState(); });
+
+            orthogonalColorPicker = new iro.ColorPicker("#orthogonal-color-picker", {...pickerOpts, color: orthogonalColor.getHexString() });
+            orthogonalColorPicker.on("color:change", (c) => {
+                orthogonalColor.set(c.hexString);
+                // 'c' here is an iro.Color object, which has rgbaString
+                // No longer setting CSS variable, will use this color directly in 2D canvas
+                saveState();
+            });
+        }
+        function initLightWheel() {
+            const wheel = document.getElementById('light-wheel'); const indicator = document.getElementById('light-indicator');
+            if (!wheel || !indicator) { console.warn("Light wheel or indicator not found."); return; }
+            function updateIndicatorDOM() { const r=wheel.offsetWidth/2;const x=lightPosition.x;const z=lightPosition.z;const a=Math.atan2(z,x);const d=Math.min(1,Math.sqrt(x*x+z*z)/10);indicator.style.left=`${r+Math.cos(a)*d*r}px`;indicator.style.top=`${r-Math.sin(a)*d*r}px`;}
+            window.updateLightIndicator = updateIndicatorDOM; updateIndicatorDOM();
+            let iD=false;const uLP=(e)=>{const r=wheel.getBoundingClientRect();const rad=wheel.offsetWidth/2;const cX=e.clientX||(e.touches&&e.touches[0].clientX);const cY=e.clientY||(e.touches&&e.touches[0].clientY);if(cX===undefined||cY===undefined)return;const x=cX-(r.left+rad);const y=cY-(r.top+rad);const dN=Math.min(1,Math.sqrt(x*x+y*y)/rad);const ang=Math.atan2(y,x);lightPosition.x=Math.cos(ang)*dN*10;lightPosition.z=-Math.sin(ang)*dN*10;updateIndicatorDOM();if(primaryLight)primaryLight.position.set(lightPosition.x,lightPosition.y,lightPosition.z);};
+            wheel.addEventListener('mousedown',(e)=>{iD=true;uLP(e);});document.addEventListener('mousemove',(e)=>{if(iD)uLP(e);});document.addEventListener('mouseup',()=>{if(iD){saveState();iD=false;}});
+            wheel.addEventListener('touchstart',(e)=>{iD=true;uLP(e);e.preventDefault();});document.addEventListener('touchmove',(e)=>{if(iD)uLP(e);e.preventDefault();});document.addEventListener('touchend',()=>{if(iD){saveState();iD=false;}});
+        }
+
+        function initPerspectiveGuides() {
+            document.getElementById('show-grid').addEventListener('change', (e) => { document.getElementById('grid-overlay').style.display = e.target.checked ? 'block' : 'none'; saveState(); });
+            document.getElementById('show-vanishing').addEventListener('change', (e) => { updatePerspectiveGuides(); saveState(); });
+            // Ensure initial state is applied
+            document.getElementById('grid-overlay').style.display = document.getElementById('show-grid').checked ? 'block' : 'none';
+            updatePerspectiveGuides();
+        }
+
+        function updatePerspectiveGuides() {
+            // Clear the 2D canvas before redrawing
+            perspectiveCtx.clearRect(0, 0, perspectiveCanvas.width, perspectiveCanvas.height);
+
+            const showVanishingLines = document.getElementById('show-vanishing').checked;
+            const enableVPDrag = document.getElementById('enable-vp-drag').checked;
+
+            // Hide the main perspective-lines container if show-vanishing is unchecked
+            document.getElementById('perspective-lines').style.display = showVanishingLines ? 'block' : 'none';
+
+            // Helper to draw a line on the 2D canvas
+            function drawPerspectiveLine(startScreenPoint, endScreenPoint) {
+                perspectiveCtx.beginPath();
+                perspectiveCtx.moveTo(startScreenPoint.x, startScreenPoint.y);
+                perspectiveCtx.lineTo(endScreenPoint.x, endScreenPoint.y);
+                perspectiveCtx.strokeStyle = getRgbaStringFromThreeColor(orthogonalColor, orthogonalOpacity);
+                perspectiveCtx.lineWidth = 1; // You can make this configurable if needed
+                perspectiveCtx.stroke();
+            }
+
+            // Always hide all VPs first, then conditionally show them based on flags
+            vpElements.x.style.display = 'none';
+            vpElements.y.style.display = 'none';
+            vpElements.z.style.display = 'none';
+
+            if (!cube || !camera || !showVanishingLines || !cube.geometry || !cube.geometry.attributes.position) {
+                return;
+            }
+
+            cube.updateMatrixWorld();
+            const m = cube.matrixWorld;
+            
+            // Get actual distorted vertices from the cube's geometry
+            const halfWidth = width / 2;
+            const halfHeight = height / 2;
+            const halfDepth = depth / 2;
+
+            const baseCorners = [
+                new THREE.Vector3(-halfWidth, -halfHeight, -halfDepth), // 0: LBB (Left Bottom Back)
+                new THREE.Vector3( halfWidth, -halfHeight, -halfDepth), // 1: RBB (Right Bottom Back)
+                new THREE.Vector3(-halfWidth,  halfHeight, -halfDepth), // 2: LTB (Left Top Back)
+                new THREE.Vector3( halfWidth,  halfHeight, -halfDepth), // 3: RTB (Right Top Back)
+                new THREE.Vector3(-halfWidth, -halfHeight,  halfDepth), // 4: LBF (Left Bottom Front)
+                new THREE.Vector3( halfWidth, -halfHeight,  halfDepth), // 5: RBF (Right Bottom Front)
+                new THREE.Vector3(-halfWidth,  halfHeight,  halfDepth), // 6: LTF (Left Top Front)
+                new THREE.Vector3( halfWidth,  halfHeight,  halfDepth)  // 7: RTF (Right Top Front)
+            ];
+
+            // Apply distortion to these base corners to get the actual distorted corner positions
+            const distortedCorners = baseCorners.map(v => {
+                let x = v.x;
+                let y = v.y;
+                let z = v.z;
+                return new THREE.Vector3(
+                    x + skewX * y + skewX * z,
+                    y + skewY * x + skewY * z,
+                    z + skewZ * x + skewZ * y
+                );
+            });
+            
+            // Project distorted corners to screen space
+            const screenCorners = distortedCorners.map(v => {
+                const vec = v.clone().applyMatrix4(m).project(camera);
+                return new THREE.Vector2(
+                    (vec.x + 1) / 2 * window.innerWidth,
+                    (1 - vec.y) / 2 * window.innerHeight
+                );
+            });
+
+            // Define parallel edge pairs for each axis using the distortedCorners
+            const edgePairs = {
+                x: [
+                    [distortedCorners[0], distortedCorners[1]], // LBB-RBB
+                    [distortedCorners[2], distortedCorners[3]], // LTB-RTB
+                    [distortedCorners[4], distortedCorners[5]], // LBF-RBF
+                    [distortedCorners[6], distortedCorners[7]]  // LTF-RTF
+                ],
+                y: [
+                    [distortedCorners[0], distortedCorners[2]], // LBB-LTB
+                    [distortedCorners[1], distortedCorners[3]], // RBB-RTB
+                    [distortedCorners[4], distortedCorners[6]], // LBF-LTF
+                    [distortedCorners[5], distortedCorners[7]]  // RBF-RTF
+                ],
+                z: [
+                    [distortedCorners[0], distortedCorners[4]], // LBB-LBF
+                    [distortedCorners[1], distortedCorners[5]], // RBB-RBF
+                    [distortedCorners[2], distortedCorners[6]], // LTB-LTF
+                    [distortedCorners[3], distortedCorners[7]]  // RTB-RTF
+                ]
+            };
+
+            const calculatedVPs = {};
+
+            function projectPoint(vec3) {
+                const v = vec3.clone().project(camera);
+                return new THREE.Vector2(
+                    (v.x + 1) / 2 * window.innerWidth,
+                    (1 - v.y) / 2 * window.innerHeight
+                );
+            }
+
+            // Calculate Vanishing Points for each axis
+            for (const axis in edgePairs) {
+                const pairs = edgePairs[axis];
+                let intersection = null;
+
+                // Try to find an intersection from the first two parallel edges
+                if (pairs.length >= 2) {
+                    const p1 = projectPoint(pairs[0][0].clone().applyMatrix4(m));
+                    const p2 = projectPoint(pairs[0][1].clone().applyMatrix4(m));
+                    const p3 = projectPoint(pairs[1][0].clone().applyMatrix4(m));
+                    const p4 = projectPoint(pairs[1][1].clone().applyMatrix4(m));
+                    intersection = getLineIntersection(p1, p2, p3, p4);
+                }
+                calculatedVPs[axis] = intersection;
+
+                // If draggable points are enabled and a valid intersection is found, position the VP.
+                // Otherwise, the VP will remain at its last position or default (0,0) but will be visible if enableVPDrag is true.
+                if (enableVPDrag && calculatedVPs[axis]) {
+                    vpElements[axis].style.left = `${calculatedVPs[axis].x}px`;
+                    vpElements[axis].style.top = `${calculatedVPs[axis].y}px`;
+                }
+            }
+
+            // Now, after calculating and potentially positioning, decide on visibility for dragging
+            if (enableVPDrag) {
+                // Show VPs if dragging is enabled, regardless of whether a precise intersection was found.
+                // This allows the user to drag them from their current (or default) position.
+                if (perspectiveType === '1-point') {
+                    vpElements.z.style.display = 'block';
+                } else if (perspectiveType === '2-point') {
+                    vpElements.x.style.display = 'block';
+                    vpElements.z.style.display = 'block';
+                } else if (perspectiveType === '3-point') {
+                    vpElements.x.style.display = 'block';
+                    vpElements.y.style.display = 'block';
+                    vpElements.z.style.display = 'block';
+                }
+            }
+
+            // Draw perspective lines from cube corners
+            distortedCorners.forEach((corner3D, i) => {
+                const cornerScreen = screenCorners[i];
+
+                if (perspectiveType === '1-point') {
+                    if (calculatedVPs.z) {
+                        drawPerspectiveLine(cornerScreen, calculatedVPs.z);
+                    }
+                } else if (perspectiveType === '2-point') {
+                    if (calculatedVPs.x) {
+                        drawPerspectiveLine(cornerScreen, calculatedVPs.x);
+                    }
+                    if (calculatedVPs.z) {
+                        drawPerspectiveLine(cornerScreen, calculatedVPs.z);
+                    }
+                } else if (perspectiveType === '3-point') {
+                    if (calculatedVPs.x) {
+                        drawPerspectiveLine(cornerScreen, calculatedVPs.x);
+                    }
+                    if (calculatedVPs.y) {
+                        drawPerspectiveLine(cornerScreen, calculatedVPs.y);
+                    }
+                    if (calculatedVPs.z) {
+                        drawPerspectiveLine(cornerScreen, calculatedVPs.z);
+                    }
+                }
+            });
+        }
+
+
+        function initPracticeTracking() {
+            startTime=new Date();updateTimer();timerInterval=setInterval(updateTimer,1000);const sC=localStorage.getItem('cubeCount');if(sC){cubeCount=parseInt(sC);document.getElementById('counter').textContent=cubeCount;}
+            document.getElementById('goal').addEventListener('change',(e)=>{dailyGoal=parseInt(e.target.value);updateProgress();saveState();});updateProgress();
+        }
+        function updateTimer() { const n=new Date();const d=Math.floor((n-startTime)/1000);const m=Math.floor(d/60).toString().padStart(2,'0');const s=(d%60).toString().padStart(2,'0');document.getElementById('timer').textContent=`${m}:${s}`; }
+        function updateProgress() { const p=Math.min(100,(cubeCount/dailyGoal)*100);document.getElementById('progress-fill').style.width=`${p}%`;document.getElementById('progress-text').textContent=`Daily Goal: ${cubeCount}/${dailyGoal} cubes`;const cM=document.getElementById('exercise-complete');if(cubeCount>=dailyGoal&&dailyGoal>0){document.getElementById('complete-count').textContent=dailyGoal;cM.style.display='block';}else{cM.style.display='none';}}
+
+        function saveState() {
+            if(historyIndex<history.length-1)history=history.slice(0,historyIndex+1);if(history.length>=MAX_HISTORY){history.shift();historyIndex--;}
+            const state={width,height,depth,displayMode,edgeColor,edgeThickness:parseFloat(document.getElementById('edge-thickness').value),cubeColor:cubeColor.getHexString(),currentTexture,lightType,lightPosition:{...lightPosition},lightIntensity:primaryLight?primaryLight.intensity:1.0,lightColor:lightColor.getHexString(),bgColor:scene.background instanceof THREE.Color?scene.background.getHexString():(scene.background instanceof THREE.Texture?'custom-image-loaded':document.getElementById('background-type').value),bgType:document.getElementById('background-type').value,cameraPosition:camera.position.toArray(),controlsTarget:controls.target.toArray(),showGrid:document.getElementById('show-grid').checked,showVanishing:document.getElementById('show-vanishing').checked,autoRotate,dailyGoal,showTimer:document.getElementById('show-timer').checked,showCounter:document.getElementById('show-counter').checked,
+                camPosX: camera.position.x,
+                camPosY: camera.position.y,
+                camPosZ: camera.position.z,
+                camTargetX: controls.target.x,
+                camTargetY: controls.target.y,
+                camTargetZ: controls.target.z,
+                perspectiveType: perspectiveType,
+                enableVPDraw: enableVPDraw,
+                orthogonalColor: orthogonalColor.getHexString(), // Save orthogonal color
+                orthogonalOpacity: orthogonalOpacity, // Save orthogonal opacity
+                skewX, skewY, skewZ // Save geometric distortion parameters
+            };
+            history.push(state);historyIndex++;updateUndoRedoButtons();
+        }
+        function applyState(state, fromHistory = true) {
+            width=state.width;height=state.height;depth=state.depth;displayMode=state.displayMode;edgeColor=state.edgeColor;cubeColor.set(state.cubeColor);currentTexture=state.currentTexture;lightType=state.lightType;lightPosition={...state.lightPosition};lightIntensity=state.lightIntensity;lightColor.set(state.lightColor);autoRotate=state.autoRotate;dailyGoal=state.dailyGoal;
+            skewX = state.skewX || 0;
+            skewY = state.skewY || 0;
+            skewZ = state.skewZ || 0;
+
+            document.getElementById('width').value=width;document.getElementById('height').value=height;document.getElementById('depth').value=depth;document.getElementById(displayMode).checked=true;document.getElementById('edge-thickness').value=state.edgeThickness;let eCK='black';for(const k in colorMap){if(colorMap[k]===edgeColor)eCK=k;}document.getElementById('edge-color').value=eCK;
+            if(cubeColorPicker)cubeColorPicker.setColor(cubeColor.getHexString());document.getElementById('texture').value=currentTexture;document.getElementById('light-type').value=lightType;document.getElementById('light-intensity').value=lightIntensity;if(lightColorPicker)lightColorPicker.setColor(lightColor.getHexString());document.getElementById('light-y-position').value=lightPosition.y;if(typeof window.updateLightIndicator==='function')window.updateLightIndicator();
+            document.getElementById('background-type').value=state.bgType;const bCE=new Event('change');document.getElementById('background-type').dispatchEvent(bCE);if(state.bgType==='color'&&bgColorPicker){bgColorPicker.setColor(state.bgColor);scene.background.set(state.bgColor);}
+            document.getElementById('auto-rotate').checked=autoRotate;document.getElementById('goal').value=dailyGoal;document.getElementById('show-timer').checked=state.showTimer;document.querySelector('.practice-timer').style.display=state.showTimer?'flex':'none';document.getElementById('show-counter').checked=state.showCounter;document.querySelector('.practice-counter').style.display=state.showCounter?'flex':'none';document.getElementById('show-grid').checked=state.showGrid;document.getElementById('grid-overlay').style.display=state.showGrid?'block':'none';
+            document.getElementById('show-vanishing').checked=state.showVanishing;
+
+            // Apply camera POV state
+            camera.position.set(state.camPosX, state.camPosY, state.camPosZ);
+            controls.target.set(state.camTargetX, state.camTargetY, state.camTargetZ);
+            controls.update();
+
+            // Update UI inputs for camera POV
+            document.getElementById('cam-pos-x').value = camera.position.x;
+            document.getElementById('cam-pos-y').value = camera.position.y;
+            document.getElementById('cam-pos-z').value = camera.position.z;
+            document.getElementById('cam-target-x').value = controls.target.x;
+            document.getElementById('cam-target-y').value = controls.target.y;
+            document.getElementById('cam-target-z').value = controls.target.z;
+
+            // Apply perspective tool state
+            perspectiveType = state.perspectiveType;
+            document.getElementById('perspective-type-select').value = perspectiveType;
+            enableVPDraw = state.enableVPDraw;
+            document.getElementById('enable-vp-drag').checked = enableVPDraw;
+
+            // Apply orthogonal line settings
+            orthogonalColor.set(state.orthogonalColor);
+            orthogonalOpacity = state.orthogonalOpacity;
+            document.getElementById('orthogonal-opacity').value = orthogonalOpacity;
+            document.getElementById('orthogonal-opacity-display').textContent = orthogonalOpacity.toFixed(2);
+            if(orthogonalColorPicker) orthogonalColorPicker.setColor(orthogonalColor.getHexString());
+
+            // Apply geometric distortion settings
+            document.getElementById('skew-x').value = skewX;
+            document.getElementById('skew-x-display').textContent = skewX.toFixed(2);
+            document.getElementById('skew-y').value = skewY;
+            document.getElementById('skew-y-display').textContent = skewY.toFixed(2);
+            document.getElementById('skew-z').value = skewZ;
+            document.getElementById('skew-z-display').textContent = skewZ.toFixed(2);
+
+
+            createCube();createLights();updateProgress();updatePerspectiveGuides();if(!fromHistory)saveState();
+        }
+        function undo() { if (historyIndex > 0) { historyIndex--; applyState(history[historyIndex]); } updateUndoRedoButtons(); }
+        function redo() { if (historyIndex < history.length - 1) { historyIndex++; applyState(history[historyIndex]); } updateUndoRedoButtons(); }
+        function updateUndoRedoButtons() { document.getElementById('undo-btn').disabled = historyIndex <= 0; document.getElementById('redo-btn').disabled = historyIndex >= history.length - 1 || historyIndex === -1; }
+
+        function setupEventListeners() {
+            document.getElementById('width').addEventListener('input', (e) => { createCube(); saveState(); });
+            document.getElementById('height').addEventListener('input', (e) => { createCube(); saveState(); });
+            document.getElementById('depth').addEventListener('input', (e) => { createCube(); saveState(); });
+            document.querySelectorAll('.preset-btn').forEach(btn => { btn.addEventListener('click', () => { width = parseFloat(btn.dataset.width); height = parseFloat(btn.dataset.height); depth = parseFloat(btn.dataset.depth); document.getElementById('width').value = width; document.getElementById('height').value = height; document.getElementById('depth').value = depth; createCube(); saveState(); }); });
+            ['solid', 'wireframe', 'translucent'].forEach(id => { document.getElementById(id).addEventListener('change', () => { displayMode = id; updateVisualMode(); saveState(); }); });
+            document.getElementById('edge-color').addEventListener('change', (e) => { edgeColor = colorMap[e.target.value]; updateVisualMode(); saveState(); });
+            document.getElementById('edge-thickness').addEventListener('input', (e) => { if (cubeEdges && cubeEdges.material) cubeEdges.material.linewidth = parseFloat(e.target.value); saveState(); });
+            document.getElementById('texture').addEventListener('change', (e) => { currentTexture = e.target.value; updateMaterial(); saveState(); });
+            document.getElementById('background-type').addEventListener('change', (e) => {const t=e.target.value;const bCC=document.getElementById('bg-color-picker-container');const bUR=document.getElementById('bg-upload-row');scene.background=null;if(t==='color'){if(bgColorPicker)scene.background=new THREE.Color(bgColorPicker.color.hexString);bCC.style.display='block';bUR.style.display='none';}else if(t==='custom-image'){bCC.style.display='none';bUR.style.display='block';const fI=document.getElementById('bg-upload');if(fI.files.length>0)fI.dispatchEvent(new Event('change'));}else{bCC.style.display='none';bUR.style.display='none';const p='https://threejs.org/examples/textures/cube/';const u=['posx.jpg','negx.jpg','posy.jpg','negy.jpg','posz.jpg','nz.jpg'];let pth='',fls=u;if(t==='room')pth=p+'Bridge2/';else if(t==='outdoor'){pth=p+'pisa/';fls=['px.png','nx.png','py.png','ny.png','pz.png','nz.png'];}else if(t==='abstract')pth=p+'Park2/';if(pth)scene.background=new THREE.CubeTextureLoader().setPath(pth).load(fls);}saveState();});
+            
+            // Check if bg-upload element exists before adding event listener
+            const bgUploadInput = document.getElementById('bg-upload');
+            if (bgUploadInput) {
+                bgUploadInput.addEventListener('change', (e) => {
+                    const f = e.target.files[0];
+                    if (f) {
+                        const r = new FileReader();
+                        r.onload = (ev) => {
+                            new THREE.TextureLoader().load(ev.target.result, tx => {
+                                tx.mapping = THREE.EquirectangularReflectionMapping;
+                                scene.background = tx;
+                                saveState();
+                            });
+                        };
+                        r.readAsDataURL(f);
+                    }
+                });
+            }
+
+            document.getElementById('light-type').addEventListener('change', (e) => { lightType = e.target.value; createLights(); saveState(); });
+            document.getElementById('light-intensity').addEventListener('input', (e) => { lightIntensity = parseFloat(e.target.value); if (primaryLight) primaryLight.intensity = lightIntensity; saveState(); });
+            document.getElementById('light-y-position').addEventListener('input', (e) => { lightPosition.y = parseFloat(e.target.value); if (primaryLight) primaryLight.position.y = lightPosition.y; if (typeof window.updateLightIndicator === 'function') window.updateLightIndicator(); saveState(); });
+            document.getElementById('reset-lights').addEventListener('click', resetLighting); document.getElementById('reset-view').addEventListener('click', resetView);
+            document.getElementById('toggle-panel').addEventListener('click', () => { document.getElementById('control-panel').classList.add('panel-collapsed'); document.getElementById('open-panel').style.display = 'flex'; });
+            document.getElementById('open-panel').addEventListener('click', () => { document.getElementById('control-panel').classList.remove('panel-collapsed'); document.getElementById('open-panel').style.display = 'none'; });
+            document.getElementById('show-grid').addEventListener('change', (e) => { document.getElementById('grid-overlay').style.display = e.target.checked ? 'block' : 'none'; saveState(); });
+            if(controls) controls.addEventListener('change', updatePerspectiveGuides);
+            document.getElementById('auto-rotate').addEventListener('change', (e) => { autoRotate = e.target.checked; saveState(); });
+            document.getElementById('show-timer').addEventListener('change', (e) => { document.querySelector('.practice-timer').style.display = e.target.checked ? 'flex':'none'; saveState(); });
+            document.getElementById('show-counter').addEventListener('change', (e) => { document.querySelector('.practice-counter').style.display = e.target.checked ? 'flex':'none'; saveState(); });
+            ['view-front','view-top','view-side','view-iso'].forEach(id=>{document.getElementById(id).addEventListener('click',()=>{if(id==='view-front')camera.position.set(0,0,7);else if(id==='view-top')camera.position.set(0,7,0.1);else if(id==='view-side')camera.position.set(7,0,0.1);else if(id==='view-iso')camera.position.set(5,5,5);camera.lookAt(0,0,0);controls.update();updatePerspectiveGuides();saveState();});});
+            document.getElementById('screenshot').addEventListener('click', ()=>{renderer.render(scene,camera);const d=renderer.domElement.toDataURL('image/png');const l=document.createElement('a');l.href=d;l.download='cube.png';l.click();});
+            document.getElementById('save-view').addEventListener('click', ()=>{renderer.render(scene,camera);const d=renderer.domElement.toDataURL('image/png');const l=document.createElement('a');l.href=d;l.download='snapshot.png';l.click();});
+            ['lock-x','lock-y'].forEach(id=>{document.getElementById(id).addEventListener('change',(e)=>{if(id==='lock-x'){controls.minPolarAngle=e.target.checked?controls.getPolarAngle():0;controls.maxPolarAngle=e.target.checked?controls.getPolarAngle():Math.PI;}if(id==='lock-y'){controls.minAzimuthAngle=e.target.checked?controls.getAzimuthalAngle():-Infinity;controls.maxAzimuthAngle=e.target.checked?controls.getAzimuthalAngle():Infinity;}controls.update();saveState();});});
+            document.getElementById('new-cube').addEventListener('click',()=>{cube.rotation.set(0,0,0);controls.reset();width=(1+Math.random()*3).toFixed(1);height=(1+Math.random()*3).toFixed(1);depth=(1+Math.random()*3).toFixed(1);document.getElementById('width').value=width;document.getElementById('height').value=height;document.getElementById('depth').value=depth;createCube();cubeCount++;document.getElementById('counter').textContent=cubeCount;localStorage.setItem('cubeCount',cubeCount);updateProgress();saveState();});
+            document.getElementById('random-view').addEventListener('click',()=>{camera.position.set((Math.random()-0.5)*12,(Math.random()-0.5)*12,4+Math.random()*8);camera.lookAt(0,0,0);controls.update();updatePerspectiveGuides();saveState();});
+            document.getElementById('reset-all').addEventListener('click',()=>{if(!confirm("Reset all settings & progress?"))return;localStorage.clear();cubeCount=0;document.getElementById('counter').textContent=0;width=2;height=2;depth=2;displayMode='solid';edgeColor=0x000000;cubeColor.set(0xD3D3D3);currentTexture='standard';autoRotate=false;dailyGoal=10;document.getElementById('width').value=2;document.getElementById('height').value=2;document.getElementById('depth').value=2;document.getElementById('solid').checked=true;document.getElementById('edge-color').value='black';document.getElementById('edge-thickness').value=1.5;document.getElementById('texture').value='standard';document.getElementById('auto-rotate').checked=false;if(cubeColorPicker)cubeColorPicker.setColor('#d3d3d3');if(bgColorPicker)bgColorPicker.setColor('#ffffff');if(lightColorPicker)lightColorPicker.setColor('#ffffff');if(orthogonalColorPicker)orthogonalColorPicker.setColor('#ff0000');orthogonalOpacity=0.3;document.getElementById('orthogonal-opacity').value = orthogonalOpacity;document.getElementById('orthogonal-opacity-display').textContent = orthogonalOpacity.toFixed(2);scene.background.set(0xffffff);document.getElementById('background-type').value='color';document.getElementById('bg-color-picker-container').style.display='block';document.getElementById('bg-upload-row').style.display='none';resetView();resetLighting();skewX=0;skewY=0;skewZ=0;document.getElementById('skew-x').value=0;document.getElementById('skew-x-display').textContent='0.00';document.getElementById('skew-y').value=0;document.getElementById('skew-y-display').textContent='0.00';document.getElementById('skew-z').value=0;document.getElementById('skew-z-display').textContent='0.00';createCube();updateProgress();history=[];historyIndex=-1;saveState();loadPresets();});
+            document.getElementById('close-complete').addEventListener('click',()=>{document.getElementById('exercise-complete').style.display='none';});
+            document.getElementById('undo-btn').addEventListener('click',undo);document.getElementById('redo-btn').addEventListener('click',redo);
+            document.getElementById('save-preset-btn').addEventListener('click',savePreset);document.getElementById('delete-preset-btn').addEventListener('click',deletePreset);
+            document.getElementById('preset-select').addEventListener('change',(e)=>{if(e.target.value)applyPreset(e.target.value);});
+
+            // Event listeners for Camera POV controls
+            document.getElementById('cam-pos-x').addEventListener('input', updateCameraPOV);
+            document.getElementById('cam-pos-y').addEventListener('input', updateCameraPOV);
+            document.getElementById('cam-pos-z').addEventListener('input', updateCameraPOV);
+            document.getElementById('cam-target-x').addEventListener('input', updateCameraPOV);
+            document.getElementById('cam-target-y').addEventListener('input', updateCameraPOV);
+            document.getElementById('cam-target-z').addEventListener('input', updateCameraPOV);
+            document.getElementById('reset-camera-pov').addEventListener('click', resetCameraPOV);
+
+            // Perspective Tool Event Listeners
+            document.getElementById('perspective-type-select').addEventListener('change', (e) => {
+                perspectiveType = e.target.value;
+                setCameraForPerspective(perspectiveType);
+                updatePerspectiveGuides();
+                saveState();
+            });
+            document.getElementById('enable-vp-drag').addEventListener('change', (e) => {
+                enableVPDraw = e.target.checked;
+                updatePerspectiveGuides(); // Redraw to show/hide VPs
+                saveState();
+            });
+            document.getElementById('reset-perspective-view').addEventListener('click', () => {
+                perspectiveType = '3-point';
+                document.getElementById('perspective-type-select').value = '3-point';
+                setCameraForPerspective('3-point');
+                updatePerspectiveGuides();
+                saveState();
+            });
+
+            // Orthogonal Opacity Slider
+            document.getElementById('orthogonal-opacity').addEventListener('input', (e) => {
+                orthogonalOpacity = parseFloat(e.target.value);
+                // No longer setting CSS variable, will use this directly in 2D canvas
+                document.getElementById('orthogonal-opacity-display').textContent = orthogonalOpacity.toFixed(2);
+                updatePerspectiveGuides(); // Redraw lines with new opacity
+                saveState();
+            });
+
+            // Geometric Distortion Event Listeners
+            document.getElementById('skew-x').addEventListener('input', (e) => {
+                skewX = parseFloat(e.target.value);
+                document.getElementById('skew-x-display').textContent = skewX.toFixed(2);
+                createCube(); // Recreate cube with new skew
+                saveState();
+            });
+            document.getElementById('skew-y').addEventListener('input', (e) => {
+                skewY = parseFloat(e.target.value);
+                document.getElementById('skew-y-display').textContent = skewY.toFixed(2);
+                createCube(); // Recreate cube with new skew
+                saveState();
+            });
+            document.getElementById('skew-z').addEventListener('input', (e) => {
+                skewZ = parseFloat(e.target.value);
+                document.getElementById('skew-z-display').textContent = skewZ.toFixed(2);
+                createCube(); // Recreate cube with new skew
+                saveState();
+            });
+            document.getElementById('reset-distortion').addEventListener('click', () => {
+                skewX = 0;
+                skewY = 0;
+                skewZ = 0;
+                document.getElementById('skew-x').value = 0;
+                document.getElementById('skew-x-display').textContent = '0.00';
+                document.getElementById('skew-y').value = 0;
+                document.getElementById('skew-y-display').textContent = '0.00';
+                document.getElementById('skew-z').value = 0;
+                document.getElementById('skew-z-display').textContent = '0.00';
+                createCube();
+                saveState();
+            });
+
+
+            // Function to update camera based on input fields
+            function updateCameraPOV() {
+                camera.position.set(
+                    parseFloat(document.getElementById('cam-pos-x').value),
+                    parseFloat(document.getElementById('cam-pos-y').value),
+                    parseFloat(document.getElementById('cam-pos-z').value)
+                );
+                controls.target.set(
+                    parseFloat(document.getElementById('cam-target-x').value),
+                    parseFloat(document.getElementById('cam-target-y').value),
+                    parseFloat(document.getElementById('cam-target-z').value)
+                );
+                controls.update();
+                updatePerspectiveGuides(); // Update guides when camera POV changes
+                saveState();
+            }
+
+            // Initial update of camera POV inputs
+            document.getElementById('cam-pos-x').value = camera.position.x;
+            document.getElementById('cam-pos-y').value = camera.position.y;
+            document.getElementById('cam-pos-z').value = camera.position.z;
+            document.getElementById('cam-target-x').value = controls.target.x;
+            document.getElementById('cam-target-y').value = controls.target.y;
+            document.getElementById('cam-target-z').value = controls.target.z;
+        }
+
+        // Functions for VP dragging
+        let dragStartX, dragStartY;
+        let initialCamPos = new THREE.Vector3();
+        let initialTargetPos = new THREE.Vector3();
+
+        function startDragVP(e) {
+            if (!enableVPDraw) return;
+            isDraggingVP = true;
+            activeVP = e.target;
+            dragStartX = e.clientX || e.touches[0].clientX;
+            dragStartY = e.clientY || e.touches[0].clientY;
+
+            initialCamPos.copy(camera.position);
+            initialTargetPos.copy(controls.target);
+
+            document.addEventListener('mousemove', dragVP);
+            document.addEventListener('mouseup', stopDragVP);
+            document.addEventListener('touchmove', dragVP, { passive: false });
+            document.addEventListener('touchend', stopDragVP);
+            e.preventDefault(); // Prevent text selection or scrolling
+        }
+
+        function dragVP(e) {
+            if (!isDraggingVP) return;
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+
+            const dx = (clientX - dragStartX) * 0.5; // Increased sensitivity
+            const dy = (clientY - dragStartY) * 0.5; // Increased sensitivity
+
+            const axis = activeVP.dataset.axis;
+
+            // Simple mapping of 2D drag to 3D camera/target adjustments
+            // This is an approximation to make VPs "draggable" and influence the view.
+            if (axis === 'x') {
+                camera.position.x = initialCamPos.x + dx * 0.1; // Reduced multiplier for smoother movement
+                controls.target.x = initialTargetPos.x + dx * 0.1;
+            } else if (axis === 'y') {
+                camera.position.y = initialCamPos.y - dy * 0.1; // Invert Y for screen coords
+                controls.target.y = initialTargetPos.y - dy * 0.1;
+            } else if (axis === 'z') {
+                camera.position.z = initialCamPos.z + dy * 0.1; // Dragging down moves camera back (positive Z)
+                controls.target.z = initialTargetPos.z + dy * 0.1;
+            }
+
+            controls.update();
+            updateCameraPOVInputs(); // Update UI inputs for camera
+            updatePerspectiveGuides(); // Recalculate and redraw VPs
+            e.preventDefault();
+        }
+
+        function stopDragVP() {
+            isDraggingVP = false;
+            activeVP = null;
+            document.removeEventListener('mousemove', dragVP);
+            document.removeEventListener('mouseup', stopDragVP);
+            document.removeEventListener('touchmove', dragVP);
+            document.removeEventListener('touchend', stopDragVP);
+            saveState(); // Save state after dragging
+        }
+
+        function updateCameraPOVInputs() {
+            document.getElementById('cam-pos-x').value = camera.position.x.toFixed(1);
+            document.getElementById('cam-pos-y').value = camera.position.y.toFixed(1);
+            document.getElementById('cam-pos-z').value = camera.position.z.toFixed(1);
+            document.getElementById('cam-target-x').value = controls.target.x.toFixed(1);
+            document.getElementById('cam-target-y').value = controls.target.y.toFixed(1);
+            document.getElementById('cam-target-z').value = controls.target.z.toFixed(1);
+        }
+
+        // Set default camera positions for different perspective types
+        function setCameraForPerspective(type) {
+            if (type === '1-point') {
+                camera.position.set(0, 0, 7);
+                controls.target.set(0, 0, 0);
+            } else if (type === '2-point') {
+                camera.position.set(5, 2, 5);
+                controls.target.set(0, 0, 0);
+            } else if (type === '3-point') {
+                // Default isometric-like view
+                camera.position.set(5, 5, 5);
+                controls.target.set(0, 0, 0);
+            }
+            controls.update();
+            updateCameraPOVInputs(); // Update UI inputs after setting camera
+        }
+
+
+        function savePreset() { const n=prompt("Preset name:");if(!n)return;const s=history[historyIndex];let p=JSON.parse(localStorage.getItem('cubePresets'))||[];const i=p.findIndex(x=>x.name===n);if(i!==-1){if(!confirm("Overwrite?"))return;p[i]={name:n,state:s};}else p.push({name:n,state:s});localStorage.setItem('cubePresets',JSON.stringify(p));loadPresets();alert("Saved!");}
+        function loadPresets() { const s=document.getElementById('preset-select');s.innerHTML='<option value="">-- Select --</option>';(JSON.parse(localStorage.getItem('cubePresets'))||[]).forEach(p=>{const o=document.createElement('option');o.value=p.name;o.textContent=p.name;s.appendChild(o);});}
+        function applyPreset(n) { const p=(JSON.parse(localStorage.getItem('cubePresets'))||[]).find(x=>x.name===n);if(p)applyState(p.state,false);}
+        function deletePreset() { const s=document.getElementById('preset-select');const n=s.value;if(!n||!confirm(`Delete "${n}"?`))return;let p=JSON.parse(localStorage.getItem('cubePresets'))||[];p=p.filter(x=>x.name!==n);localStorage.setItem('cubePresets',JSON.stringify(p));loadPresets();alert("Deleted.");}
+
+        function onWindowResize() {
+            // Resize Three.js renderer
+            if(camera && renderer){
+                camera.aspect=window.innerWidth/window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth,window.innerHeight);
+            }
+            // Resize 2D perspective canvas
+            if (perspectiveCanvas) {
+                perspectiveCanvas.width = window.innerWidth;
+                perspectiveCanvas.height = window.innerHeight;
+            }
+            updatePerspectiveGuides(); // Redraw perspective guides after resize
+        }
+
+        function animate() { requestAnimationFrame(animate);if(autoRotate&&cube){cube.rotation.y+=0.005;cube.rotation.x+=0.002;if(cubeEdges)cubeEdges.rotation.copy(cube.rotation);updatePerspectiveGuides();}if(controls)controls.update();if(renderer&&scene&&camera)renderer.render(scene,camera);}
+
+        window.onload = function () { console.log("Window loaded. Starting application."); init(); }
+    </script>
+</body>
+</html>
